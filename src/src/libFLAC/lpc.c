@@ -40,6 +40,10 @@
 #include "FLAC/assert.h"
 #include "FLAC/format.h"
 #include "share/compat.h"
+#if defined(RVV_KERNELS) && defined(__riscv_v_intrinsic)
+#  include "rvv/lpc_res_rvv.h"
+#endif
+
 #include "private/bitmath.h"
 #include "private/lpc.h"
 #include "private/macros.h"
@@ -358,6 +362,14 @@ void FLAC__lpc_compute_residual_from_qlp_coefficients(const FLAC__int32 * flac_r
 }
 #else /* fully unrolled version for normal use */
 {
+#if defined(RVV_KERNELS) && defined(__riscv_v_intrinsic)
+	/* RVV 内核：样本间无依赖，按样本向量化；与下面的展开版逐位等价 */
+	if(order >= 1 && order <= 32) {
+		flac_lpc_residual_rvv(data, data_len, qlp_coeff, order, lp_quantization, residual);
+		return;
+	}
+#endif
+
 	int i;
 	FLAC__int32 sum;
 
