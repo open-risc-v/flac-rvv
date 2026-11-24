@@ -30,3 +30,28 @@
 - [ ] 无 RVV 目标上的 dispatch 回退（`qemu-riscv64 -cpu rv64` 无 v 扩展）
 - [ ] VLEN 128 / 256 / 512 三档毒化
 - [ ] `-march` 不含 `zvl*` 时行为一致
+
+## 统一门禁入口（2026-11-25）
+
+`test/cases/01_flac_roundtrip.sh` 把 flac 的编解码接进了与其余包相同的 `STAGE/SIDE/BIN` 口径：`$BIN/flac_harness` 编码 + 解码，产物是 `flac_stream.bin` 与 `hash.txt`。板子上用 `RVV_A=<ab-a> RVV_B=<ab-b> bash test/run_ab.sh` 直接跑（`sh` 会因 `shopt` 报错，必须 bash）。
+
+两侧构建上游一致、只差内核宏：
+
+```
+cmake -S src      -B build/ab-a -DCMAKE_BUILD_TYPE=Release -DINSTALL_MANPAGES=OFF -DHAVE_GIT= \
+  -DBUILD_PROGRAMS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DBUILD_DOCS=OFF -DWITH_OGG=OFF \
+  -DCMAKE_C_FLAGS="-march=rv64gcv -O2 -DRVV_KERNELS=1" -DCMAKE_INSTALL_PREFIX=$PWD/build/ab-a/prefix
+cmake -S baseline -B build/ab-b ... 同上，但 C_FLAGS 去掉 -DRVV_KERNELS=1
+# 再做探针：-DPKG_PREFIX=<该侧 prefix> -D_USE_RVV=ON -DRVV_MARCH=rv64gcv
+```
+
+### 坑：`HAVE_GIT` 让 A/B 码流天然不同
+
+第一次跑门禁 A/B 不一致：两侧 PCM 哈希相同，但码流 5561 B vs 5567 B。`cmp` 定位到第 73 字节的 Vorbis comment vendor 串：
+
+- A（`src/`，目录里没有 `.git`）→ `reference libFLAC 1.5.0 20250211`
+- B（`baseline/`，带 `.git`）→ `reference libFLAC git-59fa340 20261028`
+
+`src/CMakeLists.txt` 里 `find_program(HAVE_GIT git)` 后会用 `git describe` 拼版本号；有没有 `.git` 决定走哪条分支。两侧加 `-DHAVE_GIT=`（空值让 `if(HAVE_GIT)` 为假）后码流逐字节一致。
+
+顺带用独立探针验证了内核本身确实位精确：直接调用 `FLAC__lpc_compute_residual_from_qlp_coefficients`，order 1..32 全跑，两侧残差 FNV 完全相同（`order=1 69b04eaff0f50d1e`、`order=32 efe89455fc27326d`）。

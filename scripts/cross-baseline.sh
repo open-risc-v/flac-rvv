@@ -28,7 +28,7 @@ cmake -S baseline -B ${OUT}/bld \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/work/${OUT}/prefix \
   -DBUILD_SHARED_LIBS=OFF \
   -DCMAKE_TOOLCHAIN_FILE=/work/cmake/toolchain-riscv64-linux.cmake \
-  -DCMAKE_C_FLAGS='-march=${MARCH}' > /tmp/cfg.log 2>&1 || { tail -30 /tmp/cfg.log; exit 1; }
+  -DCMAKE_C_FLAGS='-march=${MARCH}' -DHAVE_GIT= > /tmp/cfg.log 2>&1 || { tail -30 /tmp/cfg.log; exit 1; }
 cmake --build ${OUT}/bld -j > /tmp/bld.log 2>&1 || { tail -20 /tmp/bld.log; exit 1; }
 cmake --install ${OUT}/bld > /dev/null
 
